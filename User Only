@@ -1,0 +1,39 @@
+DECLARE @StartDate DATETIME = '2026-03-10 00:00:00';
+DECLARE @EndDate DATETIME = '2026-03-10 23:59:59';
+ 
+SELECT 
+    piv.visible_patient_id AS [HN],
+    pfn.display_name_l AS [Patient Name],
+    ua.user_name AS [User Name],
+    efn.display_name_l AS [Physician Name],
+    pco.enter_date_time AS [Entry Time],
+    pco.external_description AS [Template Used]
+ 
+FROM AmalgaPROD.dbo.patient_clinical_observation pco
+ 
+LEFT JOIN AmalgaPROD.dbo.patient_visit pv 
+    ON pco.patient_visit_id = pv.patient_visit_id
+ 
+LEFT JOIN AmalgaPROD.dbo.patient pt 
+    ON pv.patient_id = pt.patient_id
+ 
+-- Patient Info
+LEFT JOIN AmalgaPROD.dbo.patient_info_view piv 
+    ON pt.patient_id = piv.person_id
+ 
+LEFT JOIN AmalgaPROD.dbo.person_formatted_name_iview pfn
+    ON pt.patient_id = pfn.person_id
+ 
+-- User na nag entry
+LEFT JOIN AmalgaPROD.dbo.user_account ua 
+    ON pco.entered_by_employee_id = ua.person_id
+ 
+LEFT JOIN AmalgaPROD.dbo.employee_formatted_name_iview efn 
+    ON ua.person_id = efn.person_id
+ 
+WHERE efn.display_name_l LIKE '%buensalido%'
+AND pco.enter_date_time BETWEEN @StartDate AND @EndDate
+AND pco.inactivated_date_time IS NULL
+ 
+ORDER BY pco.enter_date_time ASC;
+ 
