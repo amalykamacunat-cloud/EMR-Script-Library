@@ -1,0 +1,37 @@
+SELECT
+
+pco.enter_date_time AS [Entered DateTime],
+
+pco.last_updated_date_time AS [Last Edited DateTime],
+
+pco.external_description AS [EMR Template],
+
+efn.display_name_l AS [Encoded By],
+
+beiv.ward_name_l AS [Ward],
+
+pco.observation_value AS [Note Content], -- if content is here
+
+phu.visible_patient_id AS [Hospital Number]
+
+FROM AmalgaPROD.dbo.patient_clinical_observation pco
+
+LEFT JOIN AmalgaPROD.dbo.patient_visit_nl_view pv ON pco.patient_visit_id = pv.patient_visit_id
+
+LEFT JOIN AmalgaPROD.dbo.patient_hospital_usage_nl_view phu ON pv.patient_id = phu.patient_id
+
+LEFT JOIN AmalgaPROD.dbo.employee_formatted_name_iview efn ON pco.entered_by_employee_id = efn.person_id
+
+LEFT JOIN bed_entry_info_view beiv ON beiv.patient_visit_id = pv.patient_visit_id
+
+WHERE
+
+phu.visible_patient_id = '00590222'
+
+AND efn.display_name_l LIKE '%Bilar%'
+
+AND CONVERT(DATE, pco.enter_date_time) = '2025-07-10'
+
+AND pco.enter_date_time BETWEEN '2025-07-10 09:00:00' AND '2025-07-10 10:00:00'
+
+ORDER BY pco.enter_date_time;
