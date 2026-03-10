@@ -1,0 +1,13 @@
+DELETE 
+FROM  quippe.user_setting 
+WHERE user_id != '00000000-0000-0000-0000-000000000000' AND setting_rcd in ( 'EnableQuippeDesigner' , 'EnableDesignView')
+-- Add permission to follow user
+--Palisoc , Ana Mica - 1E344C57-4AC7-11EE-B1E0-DC4A3E729D51   
+INSERT INTO [quippe].[user_setting]
+           ([user_id]
+           ,[setting_rcd]
+           ,[setting_value]
+           ,[updated_by_user_id]
+           ,[updated_date_time_utc])
+     VALUES
+           ('1E344C57-4AC7-11EE-B1E0-DC4A3E729D51   '
