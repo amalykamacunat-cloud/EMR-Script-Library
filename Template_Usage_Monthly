@@ -1,0 +1,41 @@
+DECLARE @StartDate DATE = '2025-04-01';
+DECLARE @EndDate DATE = '2025-04-30';
+
+SELECT DISTINCT
+    pfn.display_name_l AS [Patient Name],
+    phu.visible_patient_id AS [Hospital Number (HN)],
+    efn.display_name_l AS [Physician Name],
+    pco.external_description AS [EMR Template],
+    CONVERT(DATE, pco.enter_date_time) AS [Entry Date],
+    beiv.bed_code AS [Bed Number],
+    beiv.ward_name_l AS [Ward Name]
+
+FROM AmalgaPROD.dbo.patient_clinical_observation pco
+
+-- Joins
+LEFT JOIN AmalgaPROD.dbo.patient_visit_nl_view pv ON pco.patient_visit_id = pv.patient_visit_id
+LEFT JOIN AmalgaPROD.dbo.patient_hospital_usage_nl_view phu ON pv.patient_id = phu.patient_id
+LEFT JOIN AmalgaPROD.dbo.person_formatted_name_iview_nl_view pfn ON pv.patient_id = pfn.person_id
+LEFT JOIN AmalgaPROD.dbo.person_formatted_name_iview_nl_view pfn2 ON pco.entered_by_employee_id = pfn2.person_id
+LEFT JOIN AmalgaPROD.dbo.user_account ua ON pfn2.person_id = ua.person_id
+LEFT JOIN AmalgaPROD.dbo.employee_formatted_name_iview efn ON efn.person_id = ua.person_id
+INNER JOIN AmalgaPROD.dbo.caregiver_role cr ON cr.patient_visit_id = pv.patient_visit_id
+LEFT JOIN AmalgaPROD.dbo.employee_employment_info_view eiv ON eiv.person_id = pco.entered_by_employee_id
+LEFT JOIN AmalgaPROD.dbo.department_info_view d ON eiv.department_id = d.department_id
+
+-- Join to bed info to directly filter by bed_code starting with 9
+LEFT JOIN (
+    SELECT patient_visit_id, bed_code, ward_name_l
+    FROM bed_entry_info_view
+    WHERE bed_code LIKE '9%'
+) beiv ON beiv.patient_visit_id = pv.patient_visit_id
+
+-- Filters
+WHERE pv.cancelled_date_time IS NULL
+  AND pco.enter_date_time >= @StartDate
+  AND pco.enter_date_time < DATEADD(DAY, 1, @EndDate)
+  AND pco.inactivated_date_time IS NULL
+  AND cr.caregiver_role_type_rcd IN ('PRIDR', 'ADMDR', 'CONDR')
+  AND cr.caregiver_role_status_rcd = 'ACTIV'
+
+ORDER BY pfn.display_name_l, [Entry Date];
