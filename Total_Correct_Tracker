@@ -1,0 +1,18 @@
+SELECT          pco.patient_clinical_observation_id
+     ,e.employee_nr as 'Verified by Employee Nr'
+     ,ename.display_name_e as 'Verified by Employee Name'
+     ,pco.enter_date_time as 'Quippe Note Entered Date Time'
+     ,pco.lu_updated as 'Last Updated Date Time'
+     ,pco.external_description as 'Quippe Template Name'
+     ,CAST(DECOMPRESS(sdv.compressed_document_data_xml) as XML)
+     ,sdv.version_major
+     ,sdv.version_minor
+     ,sdv.*
+FROM            patient_clinical_observation pco
+INNER JOIN      sr_document_version sdv ON sdv.sr_document_id = pco.sr_document_id
+INNER JOIN  patient_hospital_usage_nl_view p on pco.patient_id = p.patient_id
+INNER JOIN  employee_nl_view e on pco.verified_by_employee_id = e.employee_id
+INNER JOIN  person_formatted_name_iview_nl_view ename on e.employee_id = ename.person_id
+WHERE           p.visible_patient_id = '00263586'
+AND    pco.enter_date_time BETWEEN '2025-11-03 06:50:00.00' AND '2025-11-03 14:50:00.000'
+AND    pco.external_description = 'Collaborative plan of care'
