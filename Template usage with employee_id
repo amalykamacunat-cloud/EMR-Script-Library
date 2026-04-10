@@ -1,4 +1,4 @@
-DECLARE @date_start DATETIME = '2026-03-05 00:00:00';
+DECLARE @date_start DATETIME = '2026-03-01 00:00:00';
  
 SELECT
     CONVERT(DATE, pc.lu_updated) AS [Date Completed],
@@ -21,9 +21,9 @@ LEFT JOIN patient_hospital_usage ph
 ON ph.patient_id = pc.patient_id
  
 LEFT JOIN employee_formatted_name_iview ua
-ON ua.employee_id = v.verified_by_employee_id
+ON ua.person_id = v.verified_by_employee_id
  
-WHERE pc.external_description LIKE '%CF2%'
+WHERE pc.external_description LIKE '%CF4%'
 AND pc.lu_updated >= @date_start
 AND v.verified_by_employee_id IS NOT NULL
  
@@ -36,3 +36,6 @@ ua.display_name_l
 ORDER BY
 [Date Completed] DESC,
 [Patient Name];
+
+
+
