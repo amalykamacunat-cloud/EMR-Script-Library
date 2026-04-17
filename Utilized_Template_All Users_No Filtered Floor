@@ -1,0 +1,30 @@
+DECLARE @date_start DATETIME = '2026-01-01 00:00:00';
+DECLARE @date_end DATETIME = '2026-04-16 23:59:59';
+ 
+SELECT
+    CONVERT(DATE, pc.lu_updated) AS [Date Completed],
+    pf.display_name_l AS [Patient Name],
+    ph.visible_patient_id AS [HN],
+ 
+    pc.lu_updated AS [Completed Time],
+ 
+    emp_pf.display_name_l AS [Created By]
+ 
+FROM patient_clinical_observation pc
+ 
+LEFT JOIN person_formatted_name_iview pf
+    ON pc.patient_id = pf.person_id
+ 
+LEFT JOIN patient_hospital_usage ph
+    ON ph.patient_id = pc.patient_id
+ 
+LEFT JOIN employee_formatted_name_iview emp_pf
+    ON pc.entered_by_employee_id = emp_pf.person_id
+ 
+WHERE pc.external_description LIKE '%Operative Note%'
+AND pc.lu_updated >= @date_start
+AND pc.lu_updated <= @date_end
+ 
+ORDER BY
+    pc.lu_updated DESC,
+    pf.display_name_l;
