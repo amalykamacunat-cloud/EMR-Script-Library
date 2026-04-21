@@ -1,0 +1,122 @@
+WITH charge_agg AS (
+    SELECT
+        patient_visit_id,
+        SUM(ISNULL(amount, 0)) AS Total_Charge
+    FROM charge_detail
+    GROUP BY patient_visit_id
+),
+ 
+base_data AS (
+    SELECT
+        apvv.patient_id,
+        apvv.patient_visit_id,
+        piv.visible_patient_id AS Patient_HN,
+        pfni.display_name_l AS Patient_Name,
+        FLOOR(DATEDIFF(DAY, peinvi.date_of_birth, GETDATE()) / 365.25) AS Age,
+        srnv.name_e AS Sex,
+        apvv.actual_visit_date_time,
+        ISNULL(q.city, pav.home_city_name_l) AS City,
+        ISNULL(ca.Total_Charge, 0) AS Total_Charge,
+        heiv.employee_status_l AS Patient_Type,
+        heiv.department_name_l AS Department,
+        pvrv.chief_complaint_or_visit_reason_l AS Visit_Reason,
+        pco2.data,
+        efn.display_name_l AS Physician_Name
+    FROM patient_visit_nl_view apvv
+ 
+    INNER JOIN patient_hospital_usage piv
+        ON apvv.patient_id = piv.patient_id
+ 
+    INNER JOIN person p
+        ON p.person_id = piv.patient_id
+ 
+    INNER JOIN person_formatted_name_iview pfni
+        ON pfni.person_id = p.person_id
+ 
+    INNER JOIN person_info_view peinvi
+        ON peinvi.person_id = p.person_id
+ 
+    INNER JOIN sex_ref_nl_view srnv
+        ON srnv.sex_rcd = peinvi.sex_rcd
+ 
+    LEFT JOIN patient_address_view pav
+        ON pav.patient_id = p.person_id
+ 
+    LEFT JOIN person_address_nl_view panv
+        ON panv.person_id = p.person_id
+        AND panv.effective_until_date IS NULL
+ 
+    LEFT JOIN address q
+        ON q.address_id = panv.address_id
+ 
+    LEFT JOIN charge_agg ca
+        ON ca.patient_visit_id = apvv.patient_visit_id
+ 
+    LEFT JOIN hr_employee_info_view heiv
+        ON heiv.person_id = p.person_id
+ 
+    LEFT JOIN patient_visit_reason_view pvrv
+        ON pvrv.patient_visit_id = apvv.patient_visit_id
+ 
+    INNER JOIN patient_clinical_observation pco2
+        ON pco2.patient_id = p.person_id
+        AND pco2.external_description = 'EHS Health Services Form 1'
+        AND CAST(pco2.enter_date_time AS DATE) = CAST(apvv.actual_visit_date_time AS DATE)
+ 
+    INNER JOIN employee_formatted_name_iview efn
+        ON efn.person_id = pco2.entered_by_employee_id
+ 
+    WHERE
+        apvv.actual_visit_date_time >= '2026-01-31'
+        AND apvv.actual_visit_date_time < '2026-02-01'
+)
+ 
+SELECT DISTINCT
+    bd.patient_id,
+    bd.Patient_HN,
+    bd.Patient_Name,
+    bd.Age,
+    bd.Sex,
+    bd.actual_visit_date_time AS Visit_Date_Time,
+    bd.City,
+    bd.Total_Charge,
+    bd.Patient_Type,
+    bd.Department,
+    bd.Visit_Reason,
+	d.Diagnosis,
+    bd.Physician_Name
+  
+ 
+FROM base_data bd
+ 
+CROSS APPLY (
+    SELECT TRY_CAST(bd.data AS XML) AS x
+) xm
+ 
+CROSS APPLY (
+    SELECT val AS Diagnosis
+    FROM (
+        --  Clinical Impression
+        SELECT xm.x.value('(//FreeText[@Name="FreeText_ClinicalImpression"])[1]', 'nvarchar(max)')
+ 
+        UNION
+ 
+        --  Principal Diagnosis
+        SELECT xm.x.value('(//Group[@Name="PrincipalDiagnosisSection"]/Finding/@Text)[1]', 'nvarchar(max)')
+ 
+        UNION
+ 
+        --  Other Diagnosis
+        SELECT g.value('(@Text)[1]', 'nvarchar(max)')
+        FROM xm.x.nodes('//Group[@Name="OtherDiagnosisSection"]/Finding') AS T(g)
+    ) all_diag(val)
+    WHERE val IS NOT NULL
+) d
+ 
+WHERE
+    bd.Patient_HN NOT IN ('00000001', '00000002') -- exluded test patient
+ 
+ORDER BY
+    bd.actual_visit_date_time,
+    bd.Patient_Name,
+    d.Diagnosis;
