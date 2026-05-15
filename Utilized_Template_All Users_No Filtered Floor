@@ -1,5 +1,7 @@
-DECLARE @date_start DATETIME = '2026-01-01 00:00:00';
-DECLARE @date_end DATETIME = '2026-04-16 23:59:59';
+-- Filtered Test Patient (Retail 1 and Retail2)
+
+DECLARE @date_start DATETIME = '2026-04-17 00:00:00';
+DECLARE @date_end DATETIME = '2026-05-07 23:59:59';
  
 SELECT
     CONVERT(DATE, pc.lu_updated) AS [Date Completed],
@@ -21,7 +23,8 @@ LEFT JOIN patient_hospital_usage ph
 LEFT JOIN employee_formatted_name_iview emp_pf
     ON pc.entered_by_employee_id = emp_pf.person_id
  
-WHERE pc.external_description LIKE '%Operative Note%'
+WHERE pc.external_description LIKE 'Inpatient Referral Acceptance Form'
+AND ph.visible_patient_id NOT IN ('00000001', '00000002')
 AND pc.lu_updated >= @date_start
 AND pc.lu_updated <= @date_end
  
