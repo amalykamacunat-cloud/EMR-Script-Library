@@ -1,0 +1,39 @@
+DECLARE @date_start DATETIME = '2026-01-17 00:00:00';
+DECLARE @date_end   DATETIME = '2026-06-07 23:59:59';
+ 
+SELECT
+    CONVERT(DATE, pc.lu_updated) AS [Date Completed],
+    pf.display_name_l AS [Patient Name],
+    ph.visible_patient_id AS [HN],
+    pc.lu_updated AS [Completed Time],
+ 
+    emp_pf.display_name_l AS [Created By],
+ 
+    pc.verified_by_employee_id AS [Finalized User ID],
+    verifier_pf.display_name_l AS [Finalized By],
+ 
+    CASE
+        WHEN pc.verified_by_employee_id IS NULL THEN 'Draft/Open'
+        ELSE 'Finalized'
+    END AS [Status]
+ 
+FROM patient_clinical_observation pc
+ 
+LEFT JOIN person_formatted_name_iview pf
+    ON pc.patient_id = pf.person_id
+ 
+LEFT JOIN patient_hospital_usage ph
+    ON ph.patient_id = pc.patient_id
+ 
+LEFT JOIN employee_formatted_name_iview emp_pf
+    ON pc.entered_by_employee_id = emp_pf.person_id
+ 
+LEFT JOIN employee_formatted_name_iview verifier_pf
+    ON pc.verified_by_employee_id = verifier_pf.person_id
+ 
+WHERE pc.external_description = 'Infusion - CF4'
+    AND ph.visible_patient_id NOT IN ('00000001', '00000002')
+    AND pc.lu_updated >= @date_start
+    AND pc.lu_updated <= @date_end
+ 
+ORDER BY pc.lu_updated DESC, pf.display_name_l;
