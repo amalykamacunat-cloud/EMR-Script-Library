@@ -17,7 +17,8 @@ WHERE
     AND pv.actual_visit_date_time >= '2024-04-01'
     AND pv.actual_visit_date_time < '2024-04-21';
 
-
+------------------------------------------------------------
+TOTAL PATIENTS / Floor Specific
 SELECT
     COUNT(DISTINCT pv.patient_visit_id) AS TotalPatients_May
 FROM patient_visit_nl_view pv
@@ -26,6 +27,12 @@ INNER JOIN bed_entry_info_view beiv
 WHERE beiv.ward_name_e IN ('6A', '6B')
     AND pv.actual_visit_date_time >= '2026-06-01'
     AND pv.actual_visit_date_time < '2026-07-01';
+
+------------------------------------------------------------
+FOR WARD_NAME
+SELECT DISTINCT ward_name_e
+FROM bed_entry_info_view
+WHERE ward_name_e IS NOT NULL;
 
 
 	--SELECT TOP 1 * FROM AmalgaPROD.dbo.patient_visit_nl_view
