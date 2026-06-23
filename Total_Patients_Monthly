@@ -18,4 +18,14 @@ WHERE
     AND pv.actual_visit_date_time < '2024-04-21';
 
 
+SELECT
+    COUNT(DISTINCT pv.patient_visit_id) AS TotalPatients_May
+FROM patient_visit_nl_view pv
+INNER JOIN bed_entry_info_view beiv
+    ON pv.patient_visit_id = beiv.patient_visit_id
+WHERE beiv.ward_name_e IN ('6A', '6B')
+    AND pv.actual_visit_date_time >= '2026-06-01'
+    AND pv.actual_visit_date_time < '2026-07-01';
+
+
 	--SELECT TOP 1 * FROM AmalgaPROD.dbo.patient_visit_nl_view
