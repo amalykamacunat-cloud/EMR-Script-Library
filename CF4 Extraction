@@ -1,0 +1,141 @@
+DECLARE @date_start DATETIME = '2026-07-01';
+DECLARE @date_end DATETIME = '2026-07-31';
+ 
+SELECT DISTINCT
+    pv.patient_id AS [Patient ID],
+    pf.display_name_l AS [Patient Name],
+    pv.patient_visit_id AS [Patient Visit ID],
+    ph.visible_patient_id AS [HN],
+    pv.visit_code AS [Visit Code],
+    pv.actual_visit_date_time AS [Actual Visit Date Time],
+    pv.closure_date_time AS [Closure Date Time],
+    pc.external_description AS [CF4 Template],
+
+    DATEDIFF(
+        DAY,
+        CONVERT(DATE, pv.closure_date_time),
+        CONVERT(DATE, GETDATE())
+    ) + 1 AS [Day No],
+    bi.bed_code AS [Ward Name],
+    pd.primary_doctor AS [Primary Doctor],
+    si.specialty_name_e AS [Sub Specialty],
+    'Primary Clinician' AS [Caregiver Role],
+   CASE
+    WHEN pc.patient_visit_id IS NOT NULL THEN 'Yes'
+    ELSE 'No'
+END AS [CF4 Completed],
+    CONVERT(DATE, pc.enter_date_time) AS [Date Completed],
+    pc.lu_updated AS [Completed Time],
+    emp_pf.display_name_l AS [Created By/Completed By],
+    hei.job_type_name_e AS [Job Type]
+ 
+FROM patient_visit_nl_view pv
+ 
+INNER JOIN patient_hospital_usage ph
+    ON pv.patient_id = ph.patient_id
+ 
+LEFT JOIN person_formatted_name_iview pf
+    ON pv.patient_id = pf.person_id
+ 
+LEFT JOIN
+(
+    SELECT *
+    FROM
+    (
+        SELECT
+            bse.*,
+            ROW_NUMBER() OVER
+            (
+                PARTITION BY bse.patient_visit_id
+                ORDER BY bse.start_date_time DESC
+            ) AS rn
+        FROM bed_schedule_entry bse
+        WHERE bse.cancelled_date_time IS NULL
+    ) x
+    WHERE rn = 1
+) bse
+    ON pv.patient_visit_id = bse.patient_visit_id
+ 
+LEFT JOIN bed_info_view bi
+    ON bse.bed_id = bi.bed_id
+ 
+LEFT JOIN
+(
+    SELECT *
+    FROM
+    (
+        SELECT *,
+            ROW_NUMBER() OVER
+            (
+                PARTITION BY patient_visit_id
+                ORDER BY ISNULL(lu_updated, enter_date_time) DESC
+            ) AS rn
+        FROM patient_clinical_observation
+        WHERE external_description LIKE '%CF4%'
+    ) x
+    WHERE rn = 1
+) pc
+    ON pv.patient_visit_id = pc.patient_visit_id
+ 
+LEFT JOIN employee_formatted_name_iview emp_pf
+    ON pc.entered_by_employee_id = emp_pf.person_id
+ 
+LEFT JOIN hr_employee_info_view hei
+    ON emp_pf.person_id = hei.person_id
+ 
+INNER JOIN
+(
+    SELECT DISTINCT cr.patient_visit_id
+    FROM caregiver_role_nl_view cr
+    INNER JOIN caregiver_role_type_ref_nl_view crt
+        ON cr.caregiver_role_type_rcd = crt.caregiver_role_type_rcd
+    WHERE crt.name_e = 'Primary Clinician'
+) pcn
+    ON pv.patient_visit_id = pcn.patient_visit_id
+ 
+LEFT JOIN
+(
+    SELECT *
+    FROM
+    (
+        SELECT
+            pv.patient_visit_id,
+            cr.employee_id,
+            ef.display_name_e AS primary_doctor,
+            ROW_NUMBER() OVER
+            (
+                PARTITION BY pv.patient_visit_id
+                ORDER BY cr.lu_updated DESC
+            ) AS rn
+        FROM patient_visit pv
+        INNER JOIN caregiver_role cr
+            ON pv.patient_visit_id = cr.patient_visit_id
+        INNER JOIN employee_formatted_name_iview ef
+            ON cr.employee_id = ef.person_id
+        WHERE pv.cancelled_date_time IS NULL
+          AND cr.caregiver_role_type_rcd = 'PRIDR'
+          AND cr.caregiver_role_status_rcd = 'ACTIV'
+    ) x
+    WHERE rn = 1
+) pd
+    ON pv.patient_visit_id = pd.patient_visit_id
+ 
+LEFT JOIN specialty_info_view si
+    ON pd.employee_id = si.employee_id
+ 
+WHERE ph.visible_patient_id NOT IN ('00000001', '00000002')
+  AND pv.closure_date_time IS NOT NULL
+  AND pv.closure_date_time >= @date_start
+  AND pv.closure_date_time < DATEADD(DAY, 1, @date_end)
+  AND bse.patient_visit_id IS NOT NULL
+  AND bi.ward_name_e IN
+  (
+      '11C','10A','10','9A','9B',
+      '8A','8B','7A','7B',
+      '6A','6B','5A','5B'
+  )
+ 
+ORDER BY
+    pv.closure_date_time ASC,
+    bi.bed_code,
+    pf.display_name_l;
