@@ -1,0 +1,112 @@
+-- ICD 10 SA CF5
+
+DECLARE @date_start DATETIME = '2026-08-01';
+DECLARE @date_end   DATETIME = '2026-08-08';
+ 
+SELECT
+    pv.patient_visit_id AS [Patient Visit ID],
+    ph.visible_patient_id AS [HN],
+    pf.display_name_l AS [Patient Name],
+    pc.lu_updated AS [CF4 Updated],
+ 
+    CASE
+        WHEN pc.data LIKE '%HomeAndImproved%'
+            THEN 'a. Home/improved'
+        WHEN pc.data LIKE '%HomeAndRecovered%'
+            THEN 'b. Home/Recovered'
+        WHEN pc.data LIKE '%HomeAndDischargeAgainstMedicalAdvice%'
+            THEN 'c. Home/Discharge Against Medical Advice'
+        WHEN pc.data LIKE '%Absconded%'
+            THEN 'd. Absconded'
+        WHEN pc.data LIKE '%ExpiredAndDeceased%'
+            THEN 'e. Expired/Deceased'
+        WHEN pc.data LIKE '%TransferredAndReferral%'
+            THEN 'f. Transferred/Referral'
+        ELSE 'NULL'
+    END AS [Patient Disposition],
+ 
+    /* Principal Diagnosis */
+    F.value('@Text', 'nvarchar(max)') AS [Principal Diagnosis],
+ 
+    /* ICD-10-WHO Code */
+    C.value('@Value', 'nvarchar(100)') AS [ICD10 WHO Code]
+ 
+FROM patient_visit_nl_view pv
+ 
+INNER JOIN patient_hospital_usage ph
+    ON pv.patient_id = ph.patient_id
+ 
+LEFT JOIN person_formatted_name_iview pf
+    ON pv.patient_id = pf.person_id
+ 
+INNER JOIN patient_clinical_observation pc
+    ON pv.patient_visit_id = pc.patient_visit_id
+    AND pc.external_description = 'CF5'
+ 
+CROSS APPLY (
+    SELECT TRY_CAST(pc.data AS XML) AS XMLData
+) X
+ 
+CROSS APPLY X.XMLData.nodes(
+    '//Group[@Name="ADischargeDiagnosisGroup"]/Finding'
+) AS FD(F)
+ 
+OUTER APPLY F.nodes(
+    './Codes/Code[@Vocab="icd10who"]'
+) AS CD(C)
+ 
+WHERE
+    ph.visible_patient_id NOT IN ('00000001', '00000002')
+    AND pv.closure_date_time IS NOT NULL
+    AND pv.closure_date_time >= @date_start
+    AND pv.closure_date_time < @date_end
+ 
+ORDER BY
+    pc.lu_updated DESC;
+
+
+
+
+
+---- Patient Disposition
+
+SELECT 
+    pv.patient_visit_id AS [Patient Visit ID],
+    ph.visible_patient_id AS [HN],
+    pf.display_name_l AS [Patient Name],
+    pc.lu_updated AS [CF4 Updated],
+ 
+    CASE
+        WHEN pc.data LIKE '%HomeAndImproved%' 
+            THEN 'a. Home/improved'
+        WHEN pc.data LIKE '%HomeAndRecovered%' 
+            THEN 'b. Home/Recovered'
+        WHEN pc.data LIKE '%HomeAndDischargeAgainstMedicalAdvice%' 
+            THEN 'c. Home/Discharge Against Medical Advice'
+        WHEN pc.data LIKE '%Absconded%' 
+            THEN 'd. Absconded'
+        WHEN pc.data LIKE '%ExpiredAndDeceased%' 
+            THEN 'e. Expired/Deceased'
+        WHEN pc.data LIKE '%TransferredAndReferral%' 
+            THEN 'f. Transferred/Referral'
+        ELSE 'NULL'
+    END AS [Patient Disposition]
+ 
+FROM patient_visit_nl_view pv
+ 
+INNER JOIN patient_hospital_usage ph
+    ON pv.patient_id = ph.patient_id
+ 
+LEFT JOIN person_formatted_name_iview pf
+    ON pv.patient_id = pf.person_id
+ 
+INNER JOIN patient_clinical_observation pc
+    ON pv.patient_visit_id = pc.patient_visit_id
+    AND pc.external_description = 'CF5'
+ 
+WHERE ph.visible_patient_id NOT IN ('00000001', '00000002')
+  AND pv.closure_date_time IS NOT NULL
+  AND pv.closure_date_time >= '2026-08-01'
+  AND pv.closure_date_time < '2026-08-08'
+ 
+ORDER BY pc.lu_updated DESC;
