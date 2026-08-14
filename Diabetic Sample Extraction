@@ -1,0 +1,523 @@
+Full Diabetic Code 
+Patient Admission x CBG Monitoring x Referral Form 
+
+SELECT
+    pv.patient_id AS [Patient ID],
+    piv.visible_patient_id AS [HN],
+ 
+    LTRIM(RTRIM(
+        COALESCE(piv.first_name_l, '') + ' ' +
+        COALESCE(piv.middle_name_l + ' ', '') +
+        COALESCE(piv.last_name_l, '')
+    )) AS [Patient Name],
+ 
+    pv.patient_visit_id AS [Patient Visit ID],
+ 
+    COALESCE(
+        adm.observation_date_time,
+        cbg.enter_date_time,
+        ref.enter_date_time
+    ) AS [Date Completed],
+ 
+    /* =========================================
+       PATIENT ADMISSION DATABASE PART 2
+       ========================================= */
+    adm.code AS [Medcin Code],
+    adm.observation AS [Observation],
+    adm.text_value AS [Patient Admission Data],
+ 
+    /* =========================================
+       CBG
+       ========================================= */
+    cbg.column_e_value AS [CBG Column E Data],
+ 
+    /* =========================================
+       INPATIENT REFERRAL
+       ========================================= */
+    ref.referral_reason AS [Referral Reason]
+ 
+FROM dbo.patient_visit pv
+ 
+LEFT JOIN dbo.patient_info_view piv
+    ON pv.patient_id = piv.person_id
+ 
+ 
+/* =====================================================
+   PATIENT ADMISSION DATABASE PART 2
+   MEDCIN CODE = 30479
+   ===================================================== */
+LEFT JOIN
+(
+    SELECT
+        pc.patient_visit_id,
+ 
+        coi.code,
+        coi.name_l AS observation,
+ 
+        pcod.text_value,
+        pcod.observation_date_time,
+        pcod.lu_updated
+ 
+    FROM dbo.patient_clinical_observation_detail pcod
+ 
+    INNER JOIN dbo.clinical_observation_item_ref_nl_view coi
+        ON pcod.clinical_observation_item_rid =
+           coi.clinical_observation_item_rid
+ 
+    INNER JOIN dbo.patient_clinical_observation pc
+        ON pcod.patient_clinical_observation_id =
+           pc.patient_clinical_observation_id
+ 
+    WHERE coi.code = '30479'
+ 
+      AND pc.external_description =
+          'Patient Admission Database Part2 (Physician)'
+ 
+      AND pcod.observation_date_time >= '2026-08-01'
+      AND pcod.observation_date_time < '2026-08-16'
+) adm
+ 
+    ON pv.patient_visit_id = adm.patient_visit_id
+ 
+ 
+/* =====================================================
+   CBG MONITORING
+   ROW 3 COL 5
+   ===================================================== */
+LEFT JOIN
+(
+    SELECT
+        pc.patient_visit_id,
+        pc.enter_date_time,
+ 
+        SUBSTRING(
+            pc.data,
+            CHARINDEX(
+                'Value="',
+                pc.data,
+                CHARINDEX(
+                    '<Cell Row="3" Col="5"',
+                    pc.data
+                )
+            ) + 7,
+ 
+            CHARINDEX(
+                '"',
+                pc.data,
+                CHARINDEX(
+                    'Value="',
+                    pc.data,
+                    CHARINDEX(
+                        '<Cell Row="3" Col="5"',
+                        pc.data
+                    )
+                ) + 7
+            )
+            -
+            (
+                CHARINDEX(
+                    'Value="',
+                    pc.data,
+                    CHARINDEX(
+                        '<Cell Row="3" Col="5"',
+                        pc.data
+                    )
+                ) + 7
+            )
+        ) AS column_e_value
+ 
+    FROM dbo.patient_clinical_observation pc
+ 
+    WHERE pc.external_description =
+          'CBG Monitoring and Insulin Administration Sheet'
+ 
+      AND pc.enter_date_time >= '2026-08-01'
+      AND pc.enter_date_time < '2026-08-16'
+ 
+      AND CHARINDEX(
+          '<Cell Row="3" Col="5"',
+          pc.data
+      ) > 0
+) cbg
+ 
+    ON pv.patient_visit_id = cbg.patient_visit_id
+ 
+ 
+/* =====================================================
+   INPATIENT REFERRAL ACCEPTANCE FORM
+   MEDCIN = 347601
+   ===================================================== */
+LEFT JOIN
+(
+    SELECT
+        pc.patient_visit_id,
+        pc.enter_date_time,
+ 
+        CASE
+            WHEN CHARINDEX(
+                '<Text>',
+                pc.data,
+                CHARINDEX(
+                    'FreeText_ReasonsForReferral',
+                    pc.data
+                )
+            ) > 0
+ 
+            AND CHARINDEX(
+                '</Text>',
+                pc.data,
+                CHARINDEX(
+                    '<Text>',
+                    pc.data,
+                    CHARINDEX(
+                        'FreeText_ReasonsForReferral',
+                        pc.data
+                    )
+                )
+            ) > 0
+ 
+            THEN LTRIM(RTRIM(
+                SUBSTRING(
+                    pc.data,
+ 
+                    CHARINDEX(
+                        '<Text>',
+                        pc.data,
+                        CHARINDEX(
+                            'FreeText_ReasonsForReferral',
+                            pc.data
+                        )
+                    ) + 6,
+ 
+                    CHARINDEX(
+                        '</Text>',
+                        pc.data,
+                        CHARINDEX(
+                            '<Text>',
+                            pc.data,
+                            CHARINDEX(
+                                'FreeText_ReasonsForReferral',
+                                pc.data
+                            )
+                        )
+                    )
+                    -
+                    (
+                        CHARINDEX(
+                            '<Text>',
+                            pc.data,
+                            CHARINDEX(
+                                'FreeText_ReasonsForReferral',
+                                pc.data
+                            )
+                        ) + 6
+                    )
+                )
+            ))
+ 
+            ELSE NULL
+        END AS referral_reason
+ 
+    FROM dbo.patient_clinical_observation pc
+ 
+    WHERE pc.external_description =
+          'Inpatient Referral Acceptance Form'
+ 
+      AND pc.enter_date_time >= '2026-08-01'
+      AND pc.enter_date_time < '2026-08-16'
+ 
+      AND (
+            CHARINDEX(
+                'FreeText_ReasonsForReferral',
+                pc.data
+            ) > 0
+ 
+            OR
+ 
+            CHARINDEX(
+                'MedcinId="347601"',
+                pc.data
+            ) > 0
+          )
+) ref
+ 
+    ON pv.patient_visit_id = ref.patient_visit_id
+ 
+ 
+/* =====================================================
+   SHOW IF MAY DATA SA KAHIT ISA
+   ===================================================== */
+WHERE
+       adm.patient_visit_id IS NOT NULL
+    OR cbg.patient_visit_id IS NOT NULL
+    OR ref.patient_visit_id IS NOT NULL
+ 
+ORDER BY
+    COALESCE(
+        adm.observation_date_time,
+        cbg.enter_date_time,
+        ref.enter_date_time
+    ) DESC;
+
+
+CBG x Patient Admission 
+SELECT
+    COALESCE(adm.patient_id, cbg.patient_id) AS [Patient ID],
+    COALESCE(adm.hn, cbg.hn) AS [HN],
+    COALESCE(adm.patient_name, cbg.patient_name) AS [Patient Name],
+    COALESCE(adm.patient_visit_id, cbg.patient_visit_id) AS [Patient Visit ID],
+ 
+    adm.visit_date AS [Visit Date],
+ 
+    adm.[Template] AS [Admission Template],
+    adm.[Medcin Code] AS [Admission Medcin Code],
+    adm.[Observation] AS [Admission Observation],
+ 
+    adm.text_value AS [Admission Text Value],
+    adm.numeric_value AS [Admission Numeric Value],
+    adm.observation_date_time AS [Admission Date Completed],
+    adm.comment AS [Admission Comment],
+ 
+    cbg.[Template] AS [CBG Template],
+    cbg.[Column E Value] AS [CBG Column E Value],
+    cbg.[Date Completed] AS [CBG Date Completed]
+ 
+FROM
+(
+    /* PATIENT ADMISSION DATABASE */
+    SELECT
+        pv.patient_id,
+        piv.visible_patient_id AS hn,
+ 
+        LTRIM(RTRIM(
+            COALESCE(piv.first_name_l, '') + ' ' +
+            COALESCE(piv.middle_name_l + ' ', '') +
+            COALESCE(piv.last_name_l, '')
+        )) AS patient_name,
+ 
+        pv.patient_visit_id,
+        pv.actual_visit_date_time AS visit_date,
+ 
+        pc.external_description AS [Template],
+        coi.code AS [Medcin Code],
+        coi.name_l AS [Observation],
+ 
+        pcod.text_value,
+        pcod.numeric_value,
+        pcod.observation_date_time,
+        pcod.comment
+ 
+    FROM dbo.patient_clinical_observation_detail pcod
+ 
+    INNER JOIN dbo.clinical_observation_item_ref_nl_view coi
+        ON pcod.clinical_observation_item_rid =
+           coi.clinical_observation_item_rid
+ 
+    INNER JOIN dbo.patient_clinical_observation pc
+        ON pcod.patient_clinical_observation_id =
+           pc.patient_clinical_observation_id
+ 
+    INNER JOIN dbo.patient_visit pv
+        ON pc.patient_visit_id =
+           pv.patient_visit_id
+ 
+    LEFT JOIN dbo.patient_info_view piv
+        ON pv.patient_id =
+           piv.person_id
+ 
+    WHERE coi.code = '30479'
+ 
+      AND pc.external_description =
+          'Patient Admission Database Part2 (Physician)'
+ 
+      AND pcod.observation_date_time >= '2026-08-01'
+ 
+      AND pcod.observation_date_time < '2026-08-16'
+) adm
+ 
+FULL OUTER JOIN
+(
+    /* CBG MONITORING */
+    SELECT
+        pv.patient_id,
+        piv.visible_patient_id AS hn,
+ 
+        LTRIM(RTRIM(
+            COALESCE(piv.first_name_l, '') + ' ' +
+            COALESCE(piv.middle_name_l + ' ', '') +
+            COALESCE(piv.last_name_l, '')
+        )) AS patient_name,
+ 
+        pv.patient_visit_id,
+ 
+        pc.external_description AS [Template],
+        pc.enter_date_time AS [Date Completed],
+ 
+        SUBSTRING(
+            pc.data,
+            CHARINDEX(
+                'Value="',
+                pc.data,
+                CHARINDEX('<Cell Row="3" Col="5"', pc.data)
+            ) + 7,
+ 
+            CHARINDEX(
+                '"',
+                pc.data,
+                CHARINDEX(
+                    'Value="',
+                    pc.data,
+                    CHARINDEX('<Cell Row="3" Col="5"', pc.data)
+                ) + 7
+            )
+            -
+            (
+                CHARINDEX(
+                    'Value="',
+                    pc.data,
+                    CHARINDEX('<Cell Row="3" Col="5"', pc.data)
+                ) + 7
+            )
+        ) AS [Column E Value]
+ 
+    FROM dbo.patient_clinical_observation pc
+ 
+    INNER JOIN dbo.patient_visit pv
+        ON pc.patient_visit_id =
+           pv.patient_visit_id
+ 
+    LEFT JOIN dbo.patient_info_view piv
+        ON pv.patient_id =
+           piv.person_id
+ 
+    WHERE pc.external_description =
+          'CBG Monitoring and Insulin Administration Sheet'
+ 
+      AND pc.enter_date_time >= '2026-08-01'
+ 
+      AND pc.enter_date_time < '2026-08-16'
+ 
+      AND CHARINDEX(
+          '<Cell Row="3" Col="5"',
+          pc.data
+      ) > 0
+) cbg
+ 
+    ON adm.patient_visit_id =
+       cbg.patient_visit_id
+ 
+ORDER BY
+    COALESCE(
+        adm.observation_date_time,
+        cbg.[Date Completed]
+    ) DESC;
+
+CBG Only 
+SELECT
+    pv.patient_id AS [Patient ID],
+    piv.visible_patient_id AS [HN],
+ 
+    LTRIM(RTRIM(
+        COALESCE(piv.first_name_l, '') + ' ' +
+        COALESCE(piv.middle_name_l + ' ', '') +
+        COALESCE(piv.last_name_l, '')
+    )) AS [Patient Name],
+ 
+    pv.patient_visit_id AS [Patient Visit ID],
+    pc.enter_date_time AS [Date Completed],
+ 
+    SUBSTRING(
+        pc.data,
+        CHARINDEX('Value="', pc.data,
+            CHARINDEX('<Cell Row="3" Col="5"', pc.data)
+        ) + 7,
+        CHARINDEX(
+            '"',
+            pc.data,
+            CHARINDEX('Value="', pc.data,
+                CHARINDEX('<Cell Row="3" Col="5"', pc.data)
+            ) + 7
+        )
+        -
+        (
+            CHARINDEX('Value="', pc.data,
+                CHARINDEX('<Cell Row="3" Col="5"', pc.data)
+            ) + 7
+        )
+    ) AS [Column E Value]
+ 
+FROM dbo.patient_clinical_observation pc
+ 
+INNER JOIN dbo.patient_visit pv
+    ON pc.patient_visit_id = pv.patient_visit_id
+ 
+LEFT JOIN dbo.patient_info_view piv
+    ON pv.patient_id = piv.person_id
+ 
+WHERE pc.external_description =
+      'CBG Monitoring and Insulin Administration Sheet'
+ 
+  AND pc.enter_date_time >= '2026-08-01'
+  AND pc.enter_date_time < '2026-08-16'
+ 
+  AND CHARINDEX('<Cell Row="3" Col="5"', pc.data) > 0
+ 
+ORDER BY pc.enter_date_time DESC;
+
+Patient Admission Database Part2 Only
+SELECT
+    pv.patient_id AS [Patient ID],
+    piv.visible_patient_id AS [HN],
+ 
+    LTRIM(RTRIM(
+        COALESCE(piv.first_name_l, '') + ' ' +
+        COALESCE(piv.middle_name_l + ' ', '') +
+        COALESCE(piv.last_name_l, '')
+    )) AS [Patient Name],
+ 
+    pv.patient_visit_id AS [Patient Visit ID],
+    pv.actual_visit_date_time AS [Visit Date],
+ 
+    pc.external_description AS [Template],
+ 
+    coi.code AS [Medcin Code],
+    coi.name_l AS [Observation],
+ 
+    pcod.patient_clinical_observation_detail_id,
+    pcod.patient_clinical_observation_id,
+    pcod.patient_clinical_observation_result_rcd,
+    pcod.clinical_observation_prefix_rcd,
+    pcod.text_value,
+    pcod.numeric_value,
+    pcod.boolean_response_rcd,
+    pcod.observation_date_time,
+    pcod.comment,
+    pcod.lu_updated
+ 
+FROM dbo.patient_clinical_observation_detail pcod
+ 
+INNER JOIN dbo.clinical_observation_item_ref_nl_view coi
+    ON pcod.clinical_observation_item_rid =
+       coi.clinical_observation_item_rid
+ 
+INNER JOIN dbo.patient_clinical_observation pc
+    ON pcod.patient_clinical_observation_id =
+       pc.patient_clinical_observation_id
+ 
+INNER JOIN dbo.patient_visit pv
+    ON pc.patient_visit_id =
+       pv.patient_visit_id
+ 
+LEFT JOIN dbo.patient_info_view piv
+    ON pv.patient_id = piv.person_id
+ 
+WHERE coi.code = '30479'
+ 
+  AND pc.external_description =
+      'Patient Admission Database Part2 (Physician)'
+ 
+  AND pcod.observation_date_time >= '2026-08-01'
+  AND pcod.observation_date_time < '2026-08-16'
+ 
+ORDER BY
+    pcod.observation_date_time DESC;
