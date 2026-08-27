@@ -1,0 +1,46 @@
+DECLARE @date_start DATETIME = '2026-08-01 00:00:00';
+DECLARE @date_end   DATETIME = '2026-08-31 23:59:59';
+ 
+SELECT DISTINCT
+    pv.patient_id AS [Patient ID],
+    ph.visible_patient_id AS [HN],
+    pf.display_name_l AS [Patient Name],
+    pv.patient_visit_id AS [Patient Visit ID],
+    pv.actual_visit_date_time AS [Actual Visit Date Time],
+    pc.enter_date_time AS [Date Completed],
+    pc.lu_updated AS [Updated Time],
+    emp_pf.display_name_l AS [Created By/Completed By],
+    pf.sex_rcd AS [Gender]
+ 
+FROM patient_clinical_observation pc
+ 
+INNER JOIN patient_visit_nl_view pv
+    ON pc.patient_visit_id = pv.patient_visit_id
+ 
+INNER JOIN patient_hospital_usage ph
+    ON pv.patient_id = ph.patient_id
+ 
+LEFT JOIN person_formatted_name_iview pf
+    ON pv.patient_id = pf.person_id
+ 
+LEFT JOIN employee_formatted_name_iview emp_pf
+    ON pc.entered_by_employee_id = emp_pf.person_id
+ 
+WHERE pc.external_description = 'Nursing Shift Assessment'
+ 
+AND pc.enter_date_time >= @date_start
+AND pc.enter_date_time < DATEADD(DAY, 1, @date_end)
+ 
+AND ph.visible_patient_id NOT IN ('00000001', '00000002')
+ 
+-- ONLY records with Nursing Care Plan
+AND (
+       pc.data LIKE '%ObstetricEMRNursingCarePlanSection%'
+    OR pc.data LIKE '%NcpVitalSIgnSection%'
+    OR pc.data LIKE '%VitalSignGroupLastestNCP%'
+    OR pc.data LIKE '%DiagnosisGravidaParaGroup%'
+)
+ 
+ORDER BY
+    pc.enter_date_time ASC,
+    pf.display_name_l ASC;
